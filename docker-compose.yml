@@ -1,0 +1,56 @@
+version: '3.1'
+
+volumes:
+  php_code:
+
+services:
+
+  dnsmasq:
+    image: andyshinn/dnsmasq:2.76
+    command: --log-facility=- --server=127.0.0.11 --server=193.10.57.11 --server=8.8.8.8 --server=172.16.0.72 --server=172.16.0.7 --neg-ttl=3600 --cache-size=1000 --max-cache-ttl=3600 --min-cache-ttl=3600 --all-servers
+    cap_add: 
+      - NET_ADMIN 
+    ports:
+      - 172.17.0.1:53:53/tcp
+      - 172.17.0.1:53:53/udp
+    links:
+      - proxy:otters.bioatlas.se
+
+  proxy:
+    image: jwilder/nginx-proxy:alpine
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - ./certs:/etc/nginx/certs
+
+  web:
+    image: nginx:alpine
+    volumes:
+      - ./src:/var/www/html
+      - ./default.conf:/etc/nginx/conf.d/default.conf
+    environment:
+      - VIRTUAL_HOST=otters.bioatlas.se
+      - VIRTUAL_PORT=80
+    depends_on:
+        - php
+        - db
+
+  php:
+    image: php:7.2-fpm-alpine3.7
+    volumes:
+      - ./src:/var/www/html
+      - ./log.conf:/usr/local/etc/php-fpm.d/zz-log.conf
+
+  db:
+    image: mariadb:10.3
+    volumes:
+      - ./data/xload.sql:/docker-entrypoint-initdb.d/xload.sql
+      - ./data/otters.tsv:/var/lib/mysql-files/otters.tsv
+    environment:
+      - MYSQL_ROOT_PASSWORD=otter
+      - MYSQL_DATABASE=otter
+      - MYSQL_USER=otter
+      - MYSQL_PASSWORD=otter
+
